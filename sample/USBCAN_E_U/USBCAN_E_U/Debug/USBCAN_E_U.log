@@ -1,0 +1,17 @@
+﻿生成启动时间为 2025/12/3 17:46:28。
+     1>项目“E:\Demo\Windows\C++\zlgcan_c++_251203\C++_USBCAN_E_U_251203\USBCAN_E_U\USBCAN_E_U\USBCAN_E_U.vcxproj”在节点 2 上(Rebuild 个目标)。
+     1>ClCompile:
+         D:\Visual Studio 2013\VC\bin\CL.exe /c /ZI /nologo /W3 /WX- /sdl /Od /Oy- /D WIN32 /D _DEBUG /D _CONSOLE /D _LIB /D _UNICODE /D UNICODE /Gm /EHsc /RTC1 /MDd /GS /fp:precise /Zc:wchar_t /Zc:forScope /Yc"stdafx.h" /Fp"Debug\USBCAN_E_U.pch" /Fo"Debug\\" /Fd"Debug\vc120.pdb" /Gd /TP /analyze- /errorReport:prompt stdafx.cpp
+         stdafx.cpp
+         D:\Visual Studio 2013\VC\bin\CL.exe /c /ZI /nologo /W3 /WX- /sdl /Od /Oy- /D WIN32 /D _DEBUG /D _CONSOLE /D _LIB /D _UNICODE /D UNICODE /Gm /EHsc /RTC1 /MDd /GS /fp:precise /Zc:wchar_t /Zc:forScope /Yu"stdafx.h" /Fp"Debug\USBCAN_E_U.pch" /Fo"Debug\\" /Fd"Debug\vc120.pdb" /Gd /TP /analyze- /errorReport:prompt USBCAN_E_U.cpp
+         USBCAN_E_U.cpp
+     1>e:\demo\windows\c++\zlgcan_c++_251203\c++_usbcan_e_u_251203\usbcan_e_u\usbcan_e_u\usbcan_e_u.cpp(54): warning C4018: “<”: 有符号/无符号不匹配
+       Link:
+         D:\Visual Studio 2013\VC\bin\link.exe /ERRORREPORT:PROMPT /OUT:"E:\Demo\Windows\C++\zlgcan_c++_251203\C++_USBCAN_E_U_251203\USBCAN_E_U\Debug\USBCAN_E_U.exe" /INCREMENTAL /NOLOGO zlgcan.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"E:\Demo\Windows\C++\zlgcan_c++_251203\C++_USBCAN_E_U_251203\USBCAN_E_U\Debug\USBCAN_E_U.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:"E:\Demo\Windows\C++\zlgcan_c++_251203\C++_USBCAN_E_U_251203\USBCAN_E_U\Debug\USBCAN_E_U.lib" /MACHINE:X86 Debug\stdafx.obj
+         Debug\USBCAN_E_U.obj
+         USBCAN_E_U.vcxproj -> E:\Demo\Windows\C++\zlgcan_c++_251203\C++_USBCAN_E_U_251203\USBCAN_E_U\Debug\USBCAN_E_U.exe
+     1>已完成生成项目“E:\Demo\Windows\C++\zlgcan_c++_251203\C++_USBCAN_E_U_251203\USBCAN_E_U\USBCAN_E_U\USBCAN_E_U.vcxproj”(Rebuild 个目标)的操作。
+
+生成成功。
+
+已用时间 00:00:01.05

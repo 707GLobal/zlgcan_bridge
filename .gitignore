@@ -1,0 +1,22 @@
+# 编译缓存（cmake）
+build/
+*.o
+*.a
+
+# 运行时产物（start_bridge.sh 生成）
+bridge.log
+bridge.pid
+
+# 厂商 SDK 二进制不入库，部署时手动放置 Linux 版 libzlgcan.so 到 lib/
+lib/*.so
+lib/*.so.*
+
+# Cache files (all languages / tools)
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
+.tmp/
+*.tmp

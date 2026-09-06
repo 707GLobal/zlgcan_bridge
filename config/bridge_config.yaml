@@ -1,0 +1,20 @@
+# ZLGCAN <-> SocketCAN 桥接配置
+# 设备初始化流程见《接口函数使用手册》：baud_rate 必须在 InitCAN 之前设置
+
+zlgcan:
+  library: libzlgcan.so     # Linux 版 SDK 库路径（可绝对路径/相对路径；也可放 lib/ 后由 start_bridge.sh 注入 LD_LIBRARY_PATH）
+  device_type: 21           # ZCAN_USBCAN_2E_U（手册 3.3.4；自测用虚拟设备为 99）
+  device_index: 0           # 设备索引（第 0 个 USBCAN-2E-U）
+  channel: 0                # 设备通道 0（一期单通道桥接）
+  baud_rate: 500000         # CAN 波特率，与真实总线/VCU 一致
+
+socketcan:
+  interface: can0           # 本地 vcan 类型接口（vcan0 保留给纯仿真 L0；FSD can_device 默认 can0，无需改动）
+
+bridge:
+  offline_check_ms: 1000    # ZCAN_IsDeviceOnLine 在线检测周期（非 STATUS_ONLINE 即掉线）
+  reconnect_ms: 2000        # 掉线/打开失败后的重试间隔
+  stats_interval_ms: 5000   # 转发统计打印周期
+  rx_wait_ms: 10            # ZCAN_Receive 阻塞等待（ms）
+  socket_poll_ms: 10        # SocketCAN 收帧轮询（ms）
+  batch: 100                # 单次批量收/发帧数
