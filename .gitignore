@@ -1,22 +1,17 @@
-# 编译缓存（cmake）
-build/
+# ========== 编译产物（make）==========
 *.o
 *.a
+zlg_can_bridge
 
-# 运行时产物（start_bridge.sh 生成）
-bridge.log
-bridge.pid
-
-# 厂商 SDK 二进制不入库，部署时手动放置 Linux 版 libzlgcan.so 到 lib/
-lib/*.so
-lib/*.so.*
-
-# Cache files (all languages / tools)
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.cache/
-.tmp/
+# ========== 运行 / 调试临时文件 ==========
 *.tmp
+core
+core.*
+
+# ========== 编辑器 / IDE / 系统文件 ==========
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
