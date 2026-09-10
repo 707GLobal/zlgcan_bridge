@@ -1,0 +1,10 @@
+# ZLG USBCAN -> SocketCAN 桥接常用参数
+#
+# 由 start_zlg_bridge.sh 读取；优先级: 命令行参数 > 本文件 > 脚本内置默认值。
+# 用法: ./start_zlg_bridge.sh [--devtype=31] [--devidx=0] [--chn=0] [--baud=500000] [--iface=can0] [--cfg=路径]
+
+devtype: 31        # ZLG 设备类型: 31=USBCAN-4E-U  20=USBCAN-E-U  34=USBCAN-8E-U
+devidx: 0          # 同型号设备序号（0=第一台）
+chn: 0             # 使用的 CAN 通道（4E-U 有 0~3）
+baud: 500000       # CAN 波特率，必须与 VCU 一致
+iface: can0        # 桥输出的 SocketCAN 接口名；不可用 vcan* 开头（hil_test 会判为仿真接口）
