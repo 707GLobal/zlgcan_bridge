@@ -6,6 +6,8 @@
 #include <string.h>
 #include <zlgcan/zlgcan.h>
 #include "zlg_bridge.h"
+#define LOG_TAG "zlg"
+#include "logger.h"
 
 static DEVICE_HANDLE   g_dev = INVALID_DEVICE_HANDLE;
 static CHANNEL_HANDLE  g_chn = INVALID_CHANNEL_HANDLE;
@@ -17,17 +19,16 @@ int zlg_bridge_open(unsigned devtype, unsigned devidx, unsigned chn, const char 
 
     DEVICE_HANDLE dev = ZCAN_OpenDevice(devtype, devidx, 0);
     if (dev == INVALID_DEVICE_HANDLE) {
-        fprintf(stderr,
-                "[zlg] ZCAN_OpenDevice(type=%u idx=%u) 失败：盒子未插入 / 权限不足(需 sudo) / 驱动未装\n",
+        LOG_ERR("ZCAN_OpenDevice(type=%u idx=%u) 失败：盒子未插入 / 权限不足(需 sudo) / 驱动未装",
                 devtype, devidx);
         return -1;
     }
 
     ZCAN_DEVICE_INFO di;
     if (ZCAN_GetDeviceInf(dev, &di) == 0)
-        fprintf(stderr, "[zlg] 设备: hw=%u fw=%u drv=%u sn=%s chn=%u\n",
-                di.hw_Version, di.fw_Version, di.dr_Version,
-                (char *)di.str_Serial_Num, di.can_Num);
+        LOG_INFO("设备: hw=%u fw=%u drv=%u sn=%s chn=%u",
+                 di.hw_Version, di.fw_Version, di.dr_Version,
+                 (char *)di.str_Serial_Num, di.can_Num);
 
     /* 通过属性接口配置通道 0：波特率(协议 500k) + 正常模式。
      * 注意：仅用 SetValue，不要在此处调 GetValue——通道未初始化时 ZLG 属性接口
@@ -36,22 +37,21 @@ int zlg_bridge_open(unsigned devtype, unsigned devidx, unsigned chn, const char 
     char path[128];
     snprintf(path, sizeof path, "info/channel/channel_%u/baud_rate", chn);
     if (!prop || prop->SetValue(path, baud) != 1)
-        fprintf(stderr, "[zlg] 警告: 无法把 %s 设为 %s（若盒默认已是 %s 可忽略）\n",
-                path, baud, baud);
+        LOG_WARN("无法把 %s 设为 %s（若盒默认已是 %s 可忽略）", path, baud, baud);
     else
-        fprintf(stderr, "[zlg] %s = %s\n", path, baud);
+        LOG_INFO("%s = %s", path, baud);
     snprintf(path, sizeof path, "info/channel/channel_%u/work_mode", chn);
     if (prop)
         prop->SetValue(path, "0"); /* 0=正常模式 */
 
     CHANNEL_HANDLE h = ZCAN_InitCAN(dev, chn, NULL);
     if (h == INVALID_CHANNEL_HANDLE) {
-        fprintf(stderr, "[zlg] ZCAN_InitCAN(ch%u) 失败\n", chn);
+        LOG_ERR("ZCAN_InitCAN(ch%u) 失败", chn);
         ZCAN_CloseDevice(dev);
         return -1;
     }
     if (ZCAN_StartCAN(h) < 0) {
-        fprintf(stderr, "[zlg] ZCAN_StartCAN 失败（VCU 未上电 / 总线错误?）\n");
+        LOG_ERR("ZCAN_StartCAN 失败（VCU 未上电 / 总线错误?）");
         ZCAN_ResetCAN(h);
         ZCAN_CloseDevice(dev);
         return -1;

@@ -5,9 +5,10 @@
 #   ./start_zlg_bridge.sh                        # 参数取自同目录 bridge.yaml
 #   ./start_zlg_bridge.sh --baud=500000 --chn=1  # 命令行覆盖 yaml 中的同名项
 #   ./start_zlg_bridge.sh --cfg=/path/bridge.yaml
+#   ./start_zlg_bridge.sh --log-level=debug --log-frames=off
 #
 # 参数优先级: 命令行 > bridge.yaml > 内置默认
-#   (devtype=31 devidx=0 chn=0 baud=500000 iface=can0)
+#   (devtype=31 devidx=0 chn=0 baud=500000 iface=can0 log_level=info log_frames=on)
 #
 # 它会:
 #   1. 检查盒子(0471:126a)与 libusbcan-4e 是否就绪
@@ -56,6 +57,14 @@ IFACE="$(cfg_get "$CFG" iface)";     IFACE="${IFACE:-can0}"
 DEVTYPE="$(cfg_get "$CFG" devtype)"; DEVTYPE="${DEVTYPE:-31}"
 DEVIDX="$(cfg_get "$CFG" devidx)";   DEVIDX="${DEVIDX:-0}"
 CHN="$(cfg_get "$CFG" chn)";         CHN="${CHN:-0}"
+LOG_LEVEL="$(cfg_get "$CFG" log_level)"; LOG_LEVEL="${LOG_LEVEL:-info}"
+LOG_FRAMES="$(cfg_get "$CFG" log_frames)"; LOG_FRAMES="${LOG_FRAMES:-on}"
+# yaml 不加引号时 on/off 会被解析成布尔 True/False，这里统一归一化
+case "$LOG_FRAMES" in
+  [Oo][Nn]|true|True|yes|Yes|1)            LOG_FRAMES=on ;;
+  [Oo][Ff][Ff]|false|False|no|No|0)        LOG_FRAMES=off ;;
+esac
+LOG_DIR="$(cfg_get "$CFG" log_dir)"; LOG_DIR="${LOG_DIR:-}"
 
 # 命令行覆盖 yaml
 for a in "${ARGV[@]}"; do
@@ -65,10 +74,17 @@ for a in "${ARGV[@]}"; do
     --devtype=*) DEVTYPE="${a#*=}" ;;
     --devidx=*)  DEVIDX="${a#*=}" ;;
     --chn=*)     CHN="${a#*=}" ;;
+    --log-level=*)  LOG_LEVEL="${a#*=}" ;;
+    --log-frames=*) LOG_FRAMES="${a#*=}" ;;
+    --log-dir=*)    LOG_DIR="${a#*=}" ;;
     --cfg=*)     ;;
     -h|--help)
-      echo "用法: $0 [--devtype=31] [--devidx=0] [--chn=0] [--baud=500000] [--iface=can0] [--cfg=bridge.yaml]"
+      echo "用法: $0 [--devtype=31] [--devidx=0] [--chn=0] [--baud=500000] [--iface=can0]"
+      echo "          [--log-level=info] [--log-frames=on] [--log-dir=路径] [--cfg=bridge.yaml]"
       echo "  --devtype: 31=USBCAN-4E-U(默认) 20=USBCAN-E-U 34=USBCAN-8E-U"
+      echo "  --log-level:  debug|info|warn|error"
+      echo "  --log-frames: on|off，是否按 ID 分文件落盘收到的报文"
+      echo "  --log-dir:    报文日志根目录，留空=可执行文件同级的 log/"
       echo "  缺省值读取 $CFG，命令行参数优先级最高"
       exit 0 ;;
     *) echo "!! 未知参数: $a"; exit 1 ;;
@@ -77,6 +93,7 @@ done
 
 echo "==> 参数来源: $CFG（命令行优先）"
 echo "    devtype=$DEVTYPE devidx=$DEVIDX chn=$CHN baud=$BAUD iface=$IFACE"
+echo "    日志: level=$LOG_LEVEL frames=$LOG_FRAMES dir=${LOG_DIR:-(默认 log/)}"
 
 echo "==> 1/3 检查硬件与驱动"
 if ! lsusb 2>/dev/null | grep -qi "0471:126a"; then
@@ -119,4 +136,9 @@ echo " 保持此终端运行。测试在另一个终端执行:"
 echo "   cd hil_test && ./scripts/hil_test.sh -l L1 -i $IFACE --no-build"
 echo " 排查: candump $IFACE  应能抓到 VCU 的 0x501 心跳"
 echo "============================================================"
-exec sudo ./zlg_can_bridge --devtype "$DEVTYPE" --devidx "$DEVIDX" --chn "$CHN" --baud "$BAUD" --iface "$IFACE"
+ARGS=(--devtype "$DEVTYPE" --devidx "$DEVIDX" --chn "$CHN" --baud "$BAUD" --iface "$IFACE"
+      --log-level "$LOG_LEVEL" --log-frames "$LOG_FRAMES")
+if [ -n "$LOG_DIR" ]; then
+  ARGS+=(--log-dir "$LOG_DIR")
+fi
+exec sudo ./zlg_can_bridge "${ARGS[@]}"

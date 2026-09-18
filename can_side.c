@@ -17,6 +17,8 @@
 #include <linux/can.h>
 #include <linux/can/raw.h>
 #include "zlg_bridge.h"
+#define LOG_TAG "can"
+#include "logger.h"
 
 static int g_sock = -1;
 static struct sockaddr_can g_addr;
@@ -28,7 +30,7 @@ int can_side_open(const char *ifname)
 
     int s = socket(PF_CAN, SOCK_RAW, CAN_RAW);
     if (s < 0) {
-        perror("[can] socket(PF_CAN)");
+        LOG_ERR("socket(PF_CAN) 失败: %s", strerror(errno));
         return -1;
     }
 
@@ -36,7 +38,7 @@ int can_side_open(const char *ifname)
     memset(&ifr, 0, sizeof ifr);
     strncpy(ifr.ifr_name, ifname, IFNAMSIZ - 1);
     if (ioctl(s, SIOCGIFINDEX, &ifr) < 0) {
-        perror("[can] ioctl(SIOCGIFINDEX)");
+        LOG_ERR("ioctl(SIOCGIFINDEX) 失败: %s", strerror(errno));
         close(s);
         return -1;
     }
@@ -45,7 +47,7 @@ int can_side_open(const char *ifname)
     g_addr.can_family = AF_CAN;
     g_addr.can_ifindex = ifr.ifr_ifindex;
     if (bind(s, (struct sockaddr *)&g_addr, sizeof g_addr) < 0) {
-        perror("[can] bind");
+        LOG_ERR("bind(%s) 失败: %s", ifname, strerror(errno));
         close(s);
         return -1;
     }
