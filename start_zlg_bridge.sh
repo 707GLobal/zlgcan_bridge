@@ -134,7 +134,7 @@ echo "============================================================"
 echo " 桥启动中: ZLG(USBCAN devtype=$DEVTYPE devidx=$DEVIDX chn=$CHN @${BAUD}bps) <-> $IFACE"
 echo " 保持此终端运行。测试在另一个终端执行:"
 echo "   cd hil_test && ./scripts/hil_test.sh -l L1 -i $IFACE --no-build"
-echo " 排查: candump $IFACE  应能抓到 VCU 的 0x501 心跳"
+echo " 排查: candump $IFACE  应能抓到 VCU 的 0x501 状态帧（事件驱动，无固定周期）"
 echo "============================================================"
 ARGS=(--devtype "$DEVTYPE" --devidx "$DEVIDX" --chn "$CHN" --baud "$BAUD" --iface "$IFACE"
       --log-level "$LOG_LEVEL" --log-frames "$LOG_FRAMES")

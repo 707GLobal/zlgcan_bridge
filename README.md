@@ -173,7 +173,7 @@ log/20260918_163300/fsd2vcu/0x210.log   # 工控机 → VCU
 | 桥终端 `VCU->FSD` 恒为 0 | ZLG 侧一帧都没收到：`chn` 接错通道 / VCU 未上电未发 0x501 / 接线（CAN_H、CAN_L 接反或未共地）/ 缺 120Ω 终端电阻 / `baud` 与 VCU 不一致 | 确认 VCU 上电并在发 0x501，再 `--chn=0/1/2/3` 逐个试；核查接线与终端电阻；确认两端均为 500k |
 | 桥终端 `err` 持续增长直至 `bus-off` | 波特率不匹配 / 接线错误；或桥先于 VCU 上电，发送无应答不断累积错误 | Ctrl-C 停桥，**先给 VCU 上电、再起桥**（当前桥无 bus-off 自动恢复） |
 | `candump <iface>` 无输出，但桥计数在增长 | `bridge.yaml` 的 `iface` 改过，终端 / 测试仍用旧接口名 | 统一接口名：`candump <新名>`，hil_test 用 `-i <新名>` |
-| hil_test 提示 `can_interface 未运行` 或心跳超时 | FSD 未编译 / 未 source workspace；真实接口下还需 VCU 在发 0x501 | 先不带 `--no-build` 跑一次编译；看 `logs/latest/<层级>/can_interface_node.log`；`candump <iface>` 确认 0x501 |
+| hil_test 提示 `can_interface 未运行` 或收不到 VCU 状态帧 | FSD 未编译 / 未 source workspace；真实接口下还需 VCU 在发 0x501 | 先不带 `--no-build` 跑一次编译；看 `logs/latest/<层级>/can_interface_node.log`；`candump <iface>` 确认 0x501 |
 
 
 ## 退出

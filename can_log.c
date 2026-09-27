@@ -29,15 +29,15 @@
 
 /*
  * 期望周期表：只有列在这里的 ID 才判定「超差」，其余 ID 只报实测值。
- * 数值来自 hil_test/config/protocol.yaml（0x210 / 0x501 均为 10Hz 保活）。
+ * 数值来自 hil_test/config/protocol.yaml。0x210 为工控机侧 10Hz 保活，可判周期；
+ * 0x501 为 VCU 事件驱动状态帧（无固定周期、可静默），不做超差判定。
  */
 static const struct {
     can_log_dir_t dir;
     uint32_t      id;
     int           period_ms;
 } k_expect[] = {
-    { CAN_LOG_VCU2FSD, 0x501, 100 },   /* VCU → 工控机 心跳 */
-    { CAN_LOG_FSD2VCU, 0x210, 100 },   /* 工控机 → VCU 心跳 */
+    { CAN_LOG_FSD2VCU, 0x210, 100 },   /* 工控机 → VCU 10Hz 保活 */
 };
 
 typedef struct {
