@@ -71,7 +71,7 @@ candump can0
 ```
 
 通过后直接跑测试（接口名 `can0` 不在 `hil_test.yaml` 的 `sim_interfaces=['vcan0']`，
-hil_test 自动按**真实接口**处理：不起 vcu_sim、不注入 0x501、拒绝 L0）：
+hil_test 自动按**真实接口**处理：不起 vcu_sim、不注入 0x501）：
 
 ```bash
 cd hil_test
@@ -113,7 +113,7 @@ sudo ./start_zlg_bridge.sh --help                      # 打印全部可用参�
 
 ### 调参要点
 
-- **`iface` 命名**：以 `vcan` 开头会被 hil_test 判为仿真接口（自动起 vcu_sim、允许注入 0x501、允许跑 L0），真实接入请用 `can0` 这类名字；**改后 hil_test 的 `-i` 必须同步**。脚本也拒绝把桥建在真实 CAN 硬件接口上（提示另取名，如 `--iface=canB`）。
+- **`iface` 命名**：以 `vcan` 开头会被 hil_test 判为仿真接口（自动起 vcu_sim、允许注入 0x501、vcu\_sim 模型用例仅在仿真接口运行），真实接入请用 `can0` 这类名字；**改后 hil_test 的 `-i` 必须同步**。脚本也拒绝把桥建在真实 CAN 硬件接口上（提示另取名，如 `--iface=canB`）。
 - **`baud` 必须与 VCU 一致**（本项目 500k），否则 `err` 持续增长直至 bus-off；建议**先给 VCU 上电、再起桥**。
 - **`chn` 接错通道**时表现为 `VCU->FSD` 恒为 0（ZLG 侧收不到任何帧），可 `--chn=0/1/2/3` 逐个试。
 - **`devtype` 要与盒子型号一致**（4E-U=31 / E-U=20 / 8E-U=34），填错的典型现象是 `ZCAN_OpenDevice` 失败。

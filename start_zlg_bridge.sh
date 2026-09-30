@@ -14,7 +14,7 @@
 #   1. 检查盒子(0471:126a)与 libusbcan-4e 是否就绪
 #   2. 创建 can0(type vcan)——注意名字是 can0 而非 vcan0，
 #      这样 hil_test 的 sim_interfaces=['vcan0'] 不会命中，按“真实接口”处理
-#      （不会自动起 vcu_sim、不会注入 0x501、L0 会被拒绝）
+#      （不会自动起 vcu_sim、不会注入 0x501）
 #   3. 前台运行桥（Ctrl-C 退出）
 #
 # 之后另开终端跑测试:
