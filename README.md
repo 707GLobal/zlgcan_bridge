@@ -17,12 +17,12 @@
 
 | 文件 | 作用 |
 | --- | --- |
-| `main.c` | 主程序：参数解析、双线程转发、统计、信号退出 |
+| `main.c` | 主程序：参数解析、双线程转发、收发计数、信号退出 |
 | `zlg_side.c` | ZLG 侧封装（只 include `<zlgcan/zlgcan.h>`） |
 | `can_side.c` | SocketCAN 侧封装（只 include `<linux/can.h>`） |
 | `zlg_bridge.h` | 两编译单元间的公共帧定义（普通 C 类型，避免两个头文件的 `struct can_frame` 冲突） |
 | `logger.c/.h` | 统一分级日志（时间戳 + 级别 + 模块标签，线程安全，见下） |
-| `can_log.c/.h` | 报文按 ID 分文件落盘 + 周期/抖动实时统计 |
+| `can_log.c/.h` | 收到的报文按 ID 分文件落盘 |
 | `start_zlg_bridge.sh` | 一键脚本：检查硬件 → 建 can0(vcan) → 编译 → 前台运行 |
 | `log/` | 运行产物（已 gitignore） |
 
@@ -64,7 +64,7 @@ Bus 001 Device 007: ID 0471:126a ZLG USBCAN-4E-U
 sudo ./start_zlg_bridge.sh                 # 默认波特率 500000、桥接口 can0
 ```
 
-另开终端验证（VCU 上电应能持续看到 0x501，周期 100ms）：
+另开终端验证（VCU 上电后应能看到 VCU 发出的 0x501 状态帧）：
 
 ```bash
 candump can0
@@ -87,18 +87,35 @@ cd hil_test
 `start_zlg_bridge.sh` 的取值优先级：**命令行 > `bridge.yaml` > 脚本内置默认**
 （内置默认 `devtype=31 devidx=0 chn=0 baud=500000 iface=can0 log_level=info log_frames=on`）。
 
-`bridge.yaml`（与本脚本同目录，**改它无需改源码、无需重编译**，脚本每次启动时读取；每项都对应一个同名命令行参数 `--key=值`）：
+`bridge.yaml`（与本脚本同目录，**改它无需改源码、无需重编译**，脚本每次启动时读取）：
 
 ```yaml
-devtype: 31        # ZLG 设备类型: 31=USBCAN-4E-U  20=USBCAN-E-U  34=USBCAN-8E-U
-devidx: 0          # 同型号设备序号（0=第一台）
-chn: 0             # 使用的 CAN 通道（4E-U 有 0~3）
-baud: 500000       # CAN 波特率，必须与 VCU 一致
+device:            # ZLG 盒子与 CAN 通道
+  type: 31         # 设备类型: 31=USBCAN-4E-U  20=USBCAN-E-U  34=USBCAN-8E-U
+  index: 0         # 同型号设备序号（0=第一台）
+  channel: 0       # 使用的 CAN 通道（4E-U 有 0~3）
+  baud: 500000     # CAN 波特率，必须与 VCU 一致
 iface: can0        # 桥输出的 SocketCAN 接口名；不可用 vcan* 开头（hil_test 会判为仿真接口）
-log_level: info    # 控制台日志级别: debug | info | warn | error
-log_frames: "on"   # 是否按 ID 分文件落盘收到的报文: on | off（yaml 里 on 会被解析成布尔，故加引号）
-log_dir: ""        # 报文日志根目录；留空=可执行文件同级的 log/（每次运行自动建时间戳子目录）
+log:               # 日志
+  level: info      # 控制台日志级别: debug | info | warn | error
+  frames: "on"     # 是否按 ID 分文件落盘收到的报文: on | off（yaml 里 on 会被解析成布尔，故加引号）
+  dir: ""          # 报文日志根目录；留空=可执行文件同级的 log/（每次运行自动建时间戳子目录）
 ```
+
+yaml 字段与命令行参数一一对应（**命名不同，命令行参数保持不变**）：
+
+| yaml 字段 | 命令行参数 |
+| --- | --- |
+| `device.type` | `--devtype` |
+| `device.index` | `--devidx` |
+| `device.channel` | `--chn` |
+| `device.baud` | `--baud` |
+| `iface` | `--iface` |
+| `log.level` | `--log-level` |
+| `log.frames` | `--log-frames` |
+| `log.dir` | `--log-dir` |
+
+yaml 键名写错或文件解析失败时，脚本会打印 `!!` 告警（不再静默回落）。
 
 临时调参不必改文件，命令行覆盖即可：
 
@@ -117,13 +134,13 @@ sudo ./start_zlg_bridge.sh --help                      # 打印全部可用参�
 - **`baud` 必须与 VCU 一致**（本项目 500k），否则 `err` 持续增长直至 bus-off；建议**先给 VCU 上电、再起桥**。
 - **`chn` 接错通道**时表现为 `VCU->FSD` 恒为 0（ZLG 侧收不到任何帧），可 `--chn=0/1/2/3` 逐个试。
 - **`devtype` 要与盒子型号一致**（4E-U=31 / E-U=20 / 8E-U=34），填错的典型现象是 `ZCAN_OpenDevice` 失败。
-- **日志三项**（`log_level` / `log_frames` / `log_dir`）用于事后核查：`log_frames: on` 会把收到的报文按 CAN ID 分文件写入 `log/<时间戳>/`，逐帧核对协议时很有用；日常跑测试可置 `off` 减少磁盘写入。
-- 读 yaml 依赖 PyYAML：若 `python3 -c "import yaml"` 不可用，脚本会**静默回落到内置默认值**（此时改 yaml 不生效），请先 `sudo apt install python3-yaml`。
+- **日志三项**（`log.level` / `log.frames` / `log.dir`）用于事后核查：`log.frames: on` 会把收到的报文按 CAN ID 分文件写入 `log/<时间戳>/`，逐帧核对协议时很有用；日常跑测试可置 `off` 减少磁盘写入。
+- 读 yaml 依赖 PyYAML：若 `python3 -c "import yaml"` 不可用，脚本会打印告警并回落到内置默认值（此时改 yaml 不生效），请先 `sudo apt install python3-yaml`。
 
 ## 日志系统介绍
 
 控制台每行格式：`2026-09-18 16:33:00.123 [INFO ] [main] 就绪: ...`，
-时间戳 + 级别 + 模块标签（`main`/`zlg`/`can`/`log`/`stat`），两个转发线程共用一个锁，
+时间戳 + 级别 + 模块标签（`main`/`zlg`/`can`/`log`），两个转发线程共用一个锁，
 整行原子输出，不会互相撕行。帧级明细**不打到控制台**，只落盘。
 
 落盘的报文按「方向 + CAN-ID」分文件，每次运行新建时间戳目录（所以多次运行的数据不混）：
@@ -133,35 +150,24 @@ log/20260918_163300/vcu2fsd/0x501.log   # VCU → 工控机
 log/20260918_163300/fsd2vcu/0x210.log   # 工控机 → VCU
 ```
 
-文件是纯文本，一行一帧，`(+100.12ms)` 是距同 ID 上一帧的间隔，肉眼即可看出周期与抖动：
+文件是纯文本，一行一帧，时间戳用 `CLOCK_REALTIME`（便于与 hil_test / dmesg 日志对齐）：
 
 ```text
 # id=0x501  dir=vcu2fsd  start=2026-09-18 16:33:00.123
-2026-09-18 16:33:00.123  (      --  )  [8]  01 02 00 00 00 00 00 00
-2026-09-18 16:33:00.224  (+ 100.12ms)  [8]  01 03 00 00 00 00 00 00
+2026-09-18 16:33:00.123  [8]  01 02 00 00 00 00 00 00
+2026-09-18 16:33:00.224  [8]  01 03 00 00 00 00 00 00
 ```
-
-同时每 2s 在控制台打印各 ID 的周期统计（`0x501`/`0x210` 的期望周期来自协议约定，
-容差 ±20%，与 `hil_test.yaml` 的 `period_tolerance_ratio` 一致）：
-
-```text
-2026-09-18 16:33:02.300 [INFO ] [stat] vcu2fsd 0x501  n=20  周期 100.21ms ±0.35 [99.8~101.2]  超差 0/19 (期望 100ms ±20%)
-```
-
-周期统计用 `CLOCK_MONOTONIC`（不受系统时钟跳变影响），落盘时间戳用 `CLOCK_REALTIME`
-（便于与 hil_test / dmesg 日志对齐）。
 
 ## 问题排查
 
-先看桥终端每 2 秒打印的收发统计，它把问题定位到「桥→VCU」还是「FSD→桥」：
+先看桥终端每 2 秒打印的收发计数，它把问题定位到「桥→VCU」还是「FSD→桥」：
 
 ```text
-2026-09-18 16:33:02.300 [INFO ] [main] FSD->VCU:129  VCU->FSD:0  (err 0/0)  收到帧:129/0
+2026-09-18 16:33:02.300 [INFO ] [main] FSD->VCU:129  VCU->FSD:0  (err 0/0)
 ```
 
 - `FSD->VCU` / `VCU->FSD`：两方向已转发帧数（`VCU->FSD` 恒 0 = ZLG 侧一帧都没收到）；
-- `err a/b`：两方向发送/接收错误计数（持续增长 → 波特率或接线问题）；
-- `收到帧 x/y`：入库（落盘）的帧数，正常应与 `FSD->VCU` / `VCU->FSD` 一致。
+- `err a/b`：两方向发送/接收错误计数（持续增长 → 波特率或接线问题）。
 
 | 症状 | 原因 | 处理 |
 | --- | --- | --- |

@@ -42,6 +42,36 @@ if val is not None:
 PYEOF
 }
 
+# 校验 yaml：文件缺失/解析失败/存在未知键时显式告警，避免"改了 yaml 却不生效"的静默失败
+cfg_validate() {
+  if [ ! -f "$CFG" ]; then
+    echo "!! 参数文件不存在: $CFG（将使用内置默认值）" >&2
+    return
+  fi
+  python3 - "$CFG" <<'PYEOF' || echo "!! $CFG 解析失败（缺 PyYAML 或语法错误），已回落到内置默认值" >&2
+import sys, yaml
+KNOWN = {"device": {"type", "index", "channel", "baud"},
+         "iface": None,
+         "log": {"level", "frames", "dir"}}
+try:
+    with open(sys.argv[1]) as f:
+        doc = yaml.safe_load(f)
+except Exception:
+    sys.exit(1)
+if not isinstance(doc, dict):
+    sys.exit(1)
+for k, v in doc.items():
+    if k not in KNOWN:
+        print(f"!! {sys.argv[1]} 未知键: {k}", file=sys.stderr)
+        continue
+    allowed = KNOWN[k]
+    if allowed is not None and isinstance(v, dict):
+        for kk in v:
+            if kk not in allowed:
+                print(f"!! {sys.argv[1]} 未知键: {k}.{kk}", file=sys.stderr)
+PYEOF
+}
+
 ARGV=("$@")
 
 # --cfg 需先解析：它决定后面读哪个 yaml
@@ -52,19 +82,20 @@ for a in "${ARGV[@]}"; do
 done
 
 # 内置默认 < bridge.yaml
-BAUD="$(cfg_get "$CFG" baud)";       BAUD="${BAUD:-500000}"
-IFACE="$(cfg_get "$CFG" iface)";     IFACE="${IFACE:-can0}"
-DEVTYPE="$(cfg_get "$CFG" devtype)"; DEVTYPE="${DEVTYPE:-31}"
-DEVIDX="$(cfg_get "$CFG" devidx)";   DEVIDX="${DEVIDX:-0}"
-CHN="$(cfg_get "$CFG" chn)";         CHN="${CHN:-0}"
-LOG_LEVEL="$(cfg_get "$CFG" log_level)"; LOG_LEVEL="${LOG_LEVEL:-info}"
-LOG_FRAMES="$(cfg_get "$CFG" log_frames)"; LOG_FRAMES="${LOG_FRAMES:-on}"
+cfg_validate
+BAUD="$(cfg_get "$CFG" device.baud)";       BAUD="${BAUD:-500000}"
+IFACE="$(cfg_get "$CFG" iface)";            IFACE="${IFACE:-can0}"
+DEVTYPE="$(cfg_get "$CFG" device.type)";    DEVTYPE="${DEVTYPE:-31}"
+DEVIDX="$(cfg_get "$CFG" device.index)";    DEVIDX="${DEVIDX:-0}"
+CHN="$(cfg_get "$CFG" device.channel)";     CHN="${CHN:-0}"
+LOG_LEVEL="$(cfg_get "$CFG" log.level)";    LOG_LEVEL="${LOG_LEVEL:-info}"
+LOG_FRAMES="$(cfg_get "$CFG" log.frames)";  LOG_FRAMES="${LOG_FRAMES:-on}"
 # yaml 不加引号时 on/off 会被解析成布尔 True/False，这里统一归一化
 case "$LOG_FRAMES" in
   [Oo][Nn]|true|True|yes|Yes|1)            LOG_FRAMES=on ;;
   [Oo][Ff][Ff]|false|False|no|No|0)        LOG_FRAMES=off ;;
 esac
-LOG_DIR="$(cfg_get "$CFG" log_dir)"; LOG_DIR="${LOG_DIR:-}"
+LOG_DIR="$(cfg_get "$CFG" log.dir)"; LOG_DIR="${LOG_DIR:-}"
 
 # 命令行覆盖 yaml
 for a in "${ARGV[@]}"; do

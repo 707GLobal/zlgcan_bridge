@@ -7,8 +7,8 @@
  *                 [--baud 500000] [--iface can0]
  *                 [--log-level info] [--log-dir log] [--log-frames on]
  *
- * 收到的报文按 ID 分类写入 <log-dir>/<本次运行时间戳>/{vcu2fsd,fsd2vcu}/0xNNN.log，
- * 同时每 2s 在控制台打印各 ID 的周期/抖动统计。详见 can_log.h。
+ * 收到的报文按 ID 分类写入 <log-dir>/<本次运行时间戳>/{vcu2fsd,fsd2vcu}/0xNNN.log。
+ * 详见 can_log.h。
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -188,16 +188,13 @@ int main(int argc, char **argv)
 
     while (!g_stop) {
         sleep(2);
-        LOG_INFO("FSD->VCU:%llu  VCU->FSD:%llu  (err %llu/%llu)  收到帧:%llu/%llu",
-                 gs.a2z, gs.z2a, gs.e_a2z, gs.e_z2a,
-                 can_log_count(CAN_LOG_FSD2VCU), can_log_count(CAN_LOG_VCU2FSD));
-        can_log_report();
+        LOG_INFO("FSD->VCU:%llu  VCU->FSD:%llu  (err %llu/%llu)",
+                 gs.a2z, gs.z2a, gs.e_a2z, gs.e_z2a);
     }
 
     g_stop = 1;
     pthread_join(t1, NULL);
     pthread_join(t2, NULL);
-    can_log_report();   /* 退出前再打一份最终统计 */
     can_log_close();
     can_side_close();
     zlg_bridge_close();
