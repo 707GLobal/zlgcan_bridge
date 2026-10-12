@@ -137,6 +137,27 @@ if [ ! -f /usr/lib/libusbcan-4e.so ] && [ ! -f /lib/libusbcan-4e.so ]; then
   exit 1
 fi
 
+# Authenticate before interface setup. The full-stack launcher may already
+# have elevated this process before detaching it from the terminal.
+PRIVILEGE=()
+if (( EUID != 0 )); then
+  if ! command -v sudo >/dev/null 2>&1; then
+    echo "!! 需要 root 权限，但未找到 sudo；请以 root 运行本脚本" >&2
+    exit 1
+  fi
+  if ! sudo -n -v 2>/dev/null; then
+    if [[ ! -t 0 ]]; then
+      echo "!! 需要 sudo 密码，但当前进程没有交互终端；尚未创建或启用 $IFACE" >&2
+      printf '   请在交互终端运行：sudo bash %q' "$0" >&2
+      if (( ${#ARGV[@]} )); then printf ' %q' "${ARGV[@]}" >&2; fi
+      printf '\n' >&2
+      exit 1
+    fi
+    sudo -v || { echo "!! sudo 认证失败，无法启动 CAN 桥" >&2; exit 1; }
+  fi
+  PRIVILEGE=(sudo -n)
+fi
+
 echo "==> 2/3 准备 SocketCAN 接口 $IFACE"
 if ip link show "$IFACE" >/dev/null 2>&1; then
   # 区分虚拟(vcan)与真实 CAN 硬件：虚拟网卡没有 /sys/class/net/<if>/device 链接
@@ -147,13 +168,16 @@ if ip link show "$IFACE" >/dev/null 2>&1; then
   fi
   echo "==> $IFACE 已存在（虚拟 CAN），复用"
 else
-  echo "==> 创建 $IFACE (type vcan, 需要 sudo)"
-  if ! sudo ip link add "$IFACE" type vcan; then
-    echo "!! 创建 $IFACE 失败（提示 File exists 说明接口已被占用，重跑本脚本即可复用）" >&2
+  echo "==> 创建 $IFACE (type vcan, 需要 root 权限)"
+  if ! "${PRIVILEGE[@]}" ip link add "$IFACE" type vcan; then
+    echo "!! 创建 $IFACE 失败，请检查上方 ip / 权限错误" >&2
     exit 1
   fi
 fi
-sudo ip link set "$IFACE" up || true
+if ! "${PRIVILEGE[@]}" ip link set "$IFACE" up; then
+  echo "!! 启用 $IFACE 失败，请检查上方权限或接口错误" >&2
+  exit 1
+fi
 echo "==> 接口就绪: $(ip -br link show "$IFACE")"
 
 echo "==> 3/3 编译并启动桥"
@@ -172,4 +196,4 @@ ARGS=(--devtype "$DEVTYPE" --devidx "$DEVIDX" --chn "$CHN" --baud "$BAUD" --ifac
 if [ -n "$LOG_DIR" ]; then
   ARGS+=(--log-dir "$LOG_DIR")
 fi
-exec sudo ./zlg_can_bridge "${ARGS[@]}"
+exec "${PRIVILEGE[@]}" ./zlg_can_bridge "${ARGS[@]}"
