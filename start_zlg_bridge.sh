@@ -182,9 +182,7 @@ echo "==> 接口就绪: $(ip -br link show "$IFACE")"
 
 echo "==> 3/3 编译并启动桥"
 cd "$DIR"
-if [ ! -x ./zlg_can_bridge ] || [ Makefile -nt ./zlg_can_bridge ]; then
-  make
-fi
+make  # 每次检查源码依赖；没有改动时不会重新编译
 echo "============================================================"
 echo " 桥启动中: ZLG(USBCAN devtype=$DEVTYPE devidx=$DEVIDX chn=$CHN @${BAUD}bps) <-> $IFACE"
 echo " 保持此终端运行。测试在另一个终端执行:"

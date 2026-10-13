@@ -23,6 +23,7 @@
 #define LOG_TAG "main"
 #include "logger.h"
 #include "can_log.h"
+#include "mode_cache.h"
 
 static volatile sig_atomic_t g_stop = 0;
 static void on_signal(int s)
@@ -66,6 +67,7 @@ static void *t_zlg_to_can0(void *arg)
         bridge_frame_t f;
         int r = zlg_bridge_rx(&f, 100); /* 每次最多阻塞 100ms 攒批 */
         if (r > 0) {
+            mode_cache_update(&f);
             can_log_write(CAN_LOG_VCU2FSD, &f);
             if (can_side_tx(&f) == 0)
                 gs.z2a++;
@@ -176,6 +178,8 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    if (mode_cache_open("/run/zlgcan_bridge", iface) < 0)
+        LOG_WARN("无法启用模式快照；实时 CAN 转发继续");
     can_log_open(log_dir, log_frames);
 
     LOG_INFO("就绪: ZLG(type=%u idx=%u chn=%u @%s bps) <-> SocketCAN %s",
@@ -195,6 +199,7 @@ int main(int argc, char **argv)
     g_stop = 1;
     pthread_join(t1, NULL);
     pthread_join(t2, NULL);
+    mode_cache_close();
     can_log_close();
     can_side_close();
     zlg_bridge_close();
