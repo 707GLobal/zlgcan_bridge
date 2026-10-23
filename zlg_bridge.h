@@ -15,7 +15,7 @@ typedef struct {
 } bridge_frame_t;
 
 /* ---- zlg_side.c：ZLG USBCAN 侧（libusbcan-4e），只 include <zlgcan/zlgcan.h> ---- */
-int  zlg_bridge_open(unsigned devtype, unsigned devidx, unsigned chn, const char *baud);
+int  zlg_bridge_open(unsigned devtype, unsigned devidx, unsigned chn, const char *baud, int receive_only);
 void zlg_bridge_close(void);
 /* 返回 1=收到帧并填入 f; 0=超时无帧; <0=错误 */
 int  zlg_bridge_rx(bridge_frame_t *f, int timeout_ms);

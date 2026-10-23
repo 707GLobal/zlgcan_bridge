@@ -72,6 +72,7 @@ for k, v in doc.items():
 PYEOF
 }
 
+RECEIVE_ONLY=0
 ARGV=("$@")
 
 # --cfg 需先解析：它决定后面读哪个 yaml
@@ -100,6 +101,7 @@ LOG_DIR="$(cfg_get "$CFG" log.dir)"; LOG_DIR="${LOG_DIR:-}"
 # 命令行覆盖 yaml
 for a in "${ARGV[@]}"; do
   case "$a" in
+    --receive-only) RECEIVE_ONLY=1 ;;
     --baud=*)    BAUD="${a#*=}" ;;
     --iface=*)   IFACE="${a#*=}" ;;
     --devtype=*) DEVTYPE="${a#*=}" ;;
@@ -111,7 +113,7 @@ for a in "${ARGV[@]}"; do
     --cfg=*)     ;;
     -h|--help)
       echo "用法: $0 [--devtype=31] [--devidx=0] [--chn=0] [--baud=500000] [--iface=can0]"
-      echo "          [--log-level=info] [--log-frames=on] [--log-dir=路径] [--cfg=bridge.yaml]"
+      echo "          [--log-level=info] [--log-frames=on] [--log-dir=路径] [--cfg=bridge.yaml] [--receive-only]"
       echo "  --devtype: 31=USBCAN-4E-U(默认) 20=USBCAN-E-U 34=USBCAN-8E-U"
       echo "  --log-level:  debug|info|warn|error"
       echo "  --log-frames: on|off，是否按 ID 分文件落盘收到的报文"
@@ -194,4 +196,5 @@ ARGS=(--devtype "$DEVTYPE" --devidx "$DEVIDX" --chn "$CHN" --baud "$BAUD" --ifac
 if [ -n "$LOG_DIR" ]; then
   ARGS+=(--log-dir "$LOG_DIR")
 fi
+[[ "$RECEIVE_ONLY" == 0 ]] || ARGS+=(--receive-only)
 exec "${PRIVILEGE[@]}" ./zlg_can_bridge "${ARGS[@]}"

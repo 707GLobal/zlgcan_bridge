@@ -85,7 +85,7 @@ static void usage(const char *p)
 {
     fprintf(stderr,
             "用法: %s [--devtype 31] [--devidx 0] [--chn 0] [--baud 500000] [--iface can0]\n"
-            "          [--log-level info] [--log-dir log] [--log-frames on]\n"
+            "          [--log-level info] [--log-dir log] [--log-frames on] [--receive-only]\n"
             "  --devtype    ZLG 设备类型: 31=USBCAN-4E-U(默认), 20=USBCAN-E-U\n"
             "  --iface      桥出的 SocketCAN 接口名(默认 can0, 须先由 start_zlg_bridge.sh 建好)\n"
             "  --log-level  控制台日志级别: debug|info|warn|error (默认 info)\n"
@@ -119,10 +119,13 @@ int main(int argc, char **argv)
     const char *iface = "can0";
     int log_level = LOG_LV_INFO;
     int log_frames = 1;
+    int receive_only = 0;
     char log_dir[PATH_MAX] = "";
 
     for (int i = 1; i < argc; i++) {
-        if (!strcmp(argv[i], "--devtype") && i + 1 < argc) {
+        if (!strcmp(argv[i], "--receive-only")) {
+            receive_only = 1;
+        } else if (!strcmp(argv[i], "--devtype") && i + 1 < argc) {
             devtype = (unsigned)atoi(argv[++i]);
         } else if (!strcmp(argv[i], "--devidx") && i + 1 < argc) {
             devidx = (unsigned)atoi(argv[++i]);
@@ -169,7 +172,7 @@ int main(int argc, char **argv)
     signal(SIGINT, on_signal);
     signal(SIGTERM, on_signal);
 
-    if (zlg_bridge_open(devtype, devidx, chn, baud) < 0)
+    if (zlg_bridge_open(devtype, devidx, chn, baud, receive_only) < 0)
         return 1;
     if (can_side_open(iface) < 0) {
         LOG_ERR("打不开接口 %s：确认已创建并 up（sudo ip link add %s type vcan && sudo ip link set %s up）",
@@ -187,7 +190,8 @@ int main(int argc, char **argv)
     LOG_INFO("运行中... Ctrl-C 退出。FSD/hil_test 把 can_device/HIL_INTERFACE 指向 %s 即可", iface);
 
     pthread_t t1, t2;
-    pthread_create(&t1, NULL, t_can0_to_zlg, NULL);
+    if (receive_only) LOG_WARN("RECEIVE ONLY: hardware transmission disabled; VCU->FSD logging enabled");
+    if (!receive_only) pthread_create(&t1, NULL, t_can0_to_zlg, NULL);
     pthread_create(&t2, NULL, t_zlg_to_can0, NULL);
 
     while (!g_stop) {
@@ -197,7 +201,7 @@ int main(int argc, char **argv)
     }
 
     g_stop = 1;
-    pthread_join(t1, NULL);
+    if (!receive_only) pthread_join(t1, NULL);
     pthread_join(t2, NULL);
     mode_cache_close();
     can_log_close();

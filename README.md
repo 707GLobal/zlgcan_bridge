@@ -203,3 +203,9 @@ log/20260918_163300/fsd2vcu/0x210.log   # 工控机 → VCU
 
 更新后必须重启旧桥进程；运行中的旧版本不会自动产生快照。
 快照表示当前桥会话最后收到的模式，不代表 VCU 当前在线。
+
+## 只收桥（2026-10-22）
+
+`start_zlg_bridge.sh --receive-only`（二进制同名参数）只启动ZLG→SocketCAN线程，继续原VCU报文日志和模式缓存；设备层 `zlg_bridge_tx` 拒绝发送。不启动SocketCAN→ZLG线程，外部向虚拟接口注入的数据也不会经此桥转到硬件。默认不传参数时保持双向桥。
+
+人工驾驶记录由主仓库CLI M键选择的有人跑动记录模式独占启动本桥，额外强制 `--log-frames=on` 并使用当次运行的zlgCAN_log目录，禁止复用外部桥。正常模式不能复用只收桥。设备仍使用原work_mode=0，未配置电气静默监听；这里只承诺软件不调用硬件数据帧发送。无硬件回归：`python3 -m pytest tests/test_receive_only.py`，以替代IO执行真实main及设备层函数，不打开USB/CAN。

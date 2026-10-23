@@ -9,13 +9,15 @@
 #define LOG_TAG "zlg"
 #include "logger.h"
 
+static int g_receive_only = 1;
 static DEVICE_HANDLE   g_dev = INVALID_DEVICE_HANDLE;
 static CHANNEL_HANDLE  g_chn = INVALID_CHANNEL_HANDLE;
 
-int zlg_bridge_open(unsigned devtype, unsigned devidx, unsigned chn, const char *baud)
+int zlg_bridge_open(unsigned devtype, unsigned devidx, unsigned chn, const char *baud, int receive_only)
 {
     if (g_dev != INVALID_DEVICE_HANDLE)
         return -1;
+    g_receive_only = receive_only;
 
     DEVICE_HANDLE dev = ZCAN_OpenDevice(devtype, devidx, 0);
     if (dev == INVALID_DEVICE_HANDLE) {
@@ -88,6 +90,7 @@ int zlg_bridge_rx(bridge_frame_t *f, int timeout_ms)
 
 int zlg_bridge_tx(const bridge_frame_t *f)
 {
+    if (g_receive_only) return -1;
     if (g_chn == INVALID_CHANNEL_HANDLE)
         return -1;
     ZCAN_Transmit_Data td;
