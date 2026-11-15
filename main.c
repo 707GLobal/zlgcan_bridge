@@ -17,6 +17,7 @@
 #include <unistd.h>
 #include <limits.h>
 #include <pthread.h>
+#include <stdatomic.h>
 
 #include "zlg_bridge.h"
 
@@ -33,10 +34,10 @@ static void on_signal(int s)
 }
 
 typedef struct {
-    unsigned long long a2z;   /* can0 -> ZLG(发往 VCU) 帧数 */
-    unsigned long long z2a;   /* ZLG(来自 VCU) -> can0 帧数 */
-    unsigned long long e_a2z;
-    unsigned long long e_z2a;
+    atomic_ullong a2z;   /* accepted by TX queue, not a bus/VCU acknowledgement */
+    atomic_ullong z2a;
+    atomic_ullong e_a2z;
+    atomic_ullong e_z2a;
 } STATS;
 static STATS gs;
 
@@ -172,7 +173,19 @@ int main(int argc, char **argv)
     signal(SIGINT, on_signal);
     signal(SIGTERM, on_signal);
 
-    if (zlg_bridge_open(devtype, devidx, chn, baud, receive_only) < 0)
+    int opened = 0;
+    for (int attempt = 1; attempt <= 3 && !g_stop; ++attempt) {
+        int result = zlg_bridge_open(devtype, devidx, chn, baud, receive_only);
+        if (result == 0) {
+            opened = 1;
+            break;
+        }
+        if (result == -2) break;
+        LOG_WARN("设备初始化失败（%d/3），已释放资源%s", attempt,
+                 attempt < 3 ? "，0.5秒后重新打开" : "");
+        if (attempt < 3) usleep(500000);
+    }
+    if (!opened)
         return 1;
     if (can_side_open(iface) < 0) {
         LOG_ERR("打不开接口 %s：确认已创建并 up（sudo ip link add %s type vcan && sudo ip link set %s up）",
@@ -181,32 +194,54 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    if (mode_cache_open("/run/zlgcan_bridge", iface) < 0)
-        LOG_WARN("无法启用模式快照；实时 CAN 转发继续");
+    if (mode_cache_open("/run/zlgcan_bridge", iface) < 0) {
+        LOG_ERR("无法建立独占会话/模式快照，拒绝启动重复或无身份的桥");
+        can_side_close();
+        zlg_bridge_close();
+        return 1;
+    }
     can_log_open(log_dir, log_frames);
-
-    LOG_INFO("就绪: ZLG(type=%u idx=%u chn=%u @%s bps) <-> SocketCAN %s",
-             devtype, devidx, chn, baud, iface);
-    LOG_INFO("运行中... Ctrl-C 退出。FSD/hil_test 把 can_device/HIL_INTERFACE 指向 %s 即可", iface);
 
     pthread_t t1, t2;
     if (receive_only) LOG_WARN("RECEIVE ONLY: hardware transmission disabled; VCU->FSD logging enabled");
-    if (!receive_only) pthread_create(&t1, NULL, t_can0_to_zlg, NULL);
-    pthread_create(&t2, NULL, t_zlg_to_can0, NULL);
+    int started1 = !receive_only && pthread_create(&t1, NULL, t_can0_to_zlg, NULL) == 0;
+    int started2 = (receive_only || started1) && pthread_create(&t2, NULL, t_zlg_to_can0, NULL) == 0;
+    int failed = !started2;
+    if (failed) {
+        LOG_ERR("CAN 转发线程创建失败");
+        g_stop = 1;
+    } else {
+        LOG_INFO("就绪: ZLG(type=%u idx=%u chn=%u @%s bps) <-> SocketCAN %s",
+                 devtype, devidx, chn, baud, iface);
+        LOG_INFO("发送计数表示驱动队列接受，不代表物理送达；不自动恢复驾驶发送");
+        if (ZLG_RUNTIME_HEALTH_CHECKS)
+            LOG_INFO("运行时USB身份/驱动错误队列每250ms检查");
+        else
+            LOG_WARN("按用户要求暂时关闭运行时健康检查（含发送前USB检查）；保留初始化及驱动收发直接失败处理");
+    }
 
+    unsigned ticks = 0;
     while (!g_stop) {
-        sleep(2);
-        LOG_INFO("FSD->VCU:%llu  VCU->FSD:%llu  (err %llu/%llu)",
-                 gs.a2z, gs.z2a, gs.e_a2z, gs.e_z2a);
+        usleep(250000);
+        if (g_stop) break;
+        if (zlg_bridge_check_health() < 0) {
+            LOG_ERR("CAN 桥健康检查失败，停止转发并退出；需重新启动初始化");
+            failed = 1;
+            break;
+        }
+        if (++ticks % 8 == 0)
+            LOG_INFO("FSD->VCU(queue):%llu  VCU->FSD:%llu  (err %llu/%llu)",
+                     atomic_load(&gs.a2z), atomic_load(&gs.z2a),
+                     atomic_load(&gs.e_a2z), atomic_load(&gs.e_z2a));
     }
 
     g_stop = 1;
-    if (!receive_only) pthread_join(t1, NULL);
-    pthread_join(t2, NULL);
+    if (started1) pthread_join(t1, NULL);
+    if (started2) pthread_join(t2, NULL);
     mode_cache_close();
     can_log_close();
     can_side_close();
     zlg_bridge_close();
     LOG_INFO("已退出");
-    return 0;
+    return failed ? 1 : 0;
 }

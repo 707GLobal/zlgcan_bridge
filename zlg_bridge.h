@@ -1,6 +1,9 @@
 #ifndef ZLG_BRIDGE_H_
 #define ZLG_BRIDGE_H_
 
+
+#define ZLG_RUNTIME_HEALTH_CHECKS 1
+
 #include <stdint.h>
 
 /*
@@ -17,6 +20,8 @@ typedef struct {
 /* ---- zlg_side.c：ZLG USBCAN 侧（libusbcan-4e），只 include <zlgcan/zlgcan.h> ---- */
 int  zlg_bridge_open(unsigned devtype, unsigned devidx, unsigned chn, const char *baud, int receive_only);
 void zlg_bridge_close(void);
+/* Current USB identity and driver error queue; failure requires a new process. */
+int zlg_bridge_check_health(void);
 /* 返回 1=收到帧并填入 f; 0=超时无帧; <0=错误 */
 int  zlg_bridge_rx(bridge_frame_t *f, int timeout_ms);
 /* 返回 0=成功; <0=失败 */

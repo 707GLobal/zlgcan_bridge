@@ -169,7 +169,7 @@ log/20260918_163300/fsd2vcu/0x210.log   # 工控机 → VCU
 2026-09-18 16:33:02.300 [INFO ] [main] FSD->VCU:129  VCU->FSD:0  (err 0/0)
 ```
 
-- `FSD->VCU` / `VCU->FSD`：两方向已转发帧数（`VCU->FSD` 恒 0 = ZLG 侧一帧都没收到）；
+- `FSD->VCU(queue)`：驱动队列接受的提交数，不代表VCU实际收到；`VCU->FSD`：转入SocketCAN的帧数（`VCU->FSD` 恒 0 = ZLG 侧一帧都没收到）；
 - `err a/b`：两方向发送/接收错误计数（持续增长 → 波特率或接线问题）。
 
 | 症状 | 原因 | 处理 |
@@ -180,14 +180,14 @@ log/20260918_163300/fsd2vcu/0x210.log   # 工控机 → VCU
 | 步骤 2/3 报 `创建 <iface> 失败` | 无 CAP_NET_ADMIN（容器 / 权限受限） | 提权运行；容器需 `--privileged`（或加 CAP_NET_ADMIN 并加载 vcan 模块） |
 | 步骤 2/3 提示 `已存在且挂在真实设备上…拒绝复用`（疑似真实 CAN 硬件） | 接口名与内核真实 CAN 网卡重名 | 换独立虚拟接口名：`sudo ./start_zlg_bridge.sh --iface=canB`，并把 hil_test 的 `-i` 同步改为 `canB` |
 | 桥终端 `VCU->FSD` 恒为 0 | ZLG 侧一帧都没收到：`chn` 接错通道 / VCU 未上电未发 0x501 / 接线（CAN_H、CAN_L 接反或未共地）/ 缺 120Ω 终端电阻 / `baud` 与 VCU 不一致 | 确认 VCU 上电并在发 0x501，再 `--chn=0/1/2/3` 逐个试；核查接线与终端电阻；确认两端均为 500k |
-| 桥终端 `err` 持续增长直至 `bus-off` | 波特率不匹配 / 接线错误；或桥先于 VCU 上电，发送无应答不断累积错误 | Ctrl-C 停桥，**先给 VCU 上电、再起桥**（当前桥无 bus-off 自动恢复） |
+| 桥终端 `err` 持续增长直至 `bus-off` | 波特率不匹配 / 接线错误；或桥先于 VCU 上电，发送无应答不断累积错误 | Ctrl-C 停桥，**先给 VCU 上电、再起桥**（当前桥检测到驱动错误后退出，无 bus-off 自动恢复） |
 | `candump <iface>` 无输出，但桥计数在增长 | `bridge.yaml` 的 `iface` 改过，终端 / 测试仍用旧接口名 | 统一接口名：`candump <新名>`，hil_test 用 `-i <新名>` |
 | hil_test 提示 `can_interface 未运行` 或收不到 VCU 状态帧 | FSD 未编译 / 未 source workspace；真实接口下还需 VCU 在发 0x501 | 先不带 `--no-build` 跑一次编译；看 `logs/latest/<层级>/can_interface_node.log`；`candump <iface>` 确认 0x501 |
 
 
 ## 退出
 
-前台 Ctrl-C（SIGINT/SIGTERM）自动 `ZCAN_ResetCAN` + `ZCAN_CloseDevice` + 关闭 socket。
+前台 Ctrl-C（SIGINT/SIGTERM）自动 `ZCAN_ResetCAN` + `ZCAN_CloseDevice` + 关闭 socket。USB连接失效或驱动错误也会结束本次桥进程，不在运行中自动重连恢复发送。
 `can0`(vcan) 接口保留，可 `sudo ip link del can0` 手动删除。
 
 
@@ -209,3 +209,19 @@ log/20260918_163300/fsd2vcu/0x210.log   # 工控机 → VCU
 `start_zlg_bridge.sh --receive-only`（二进制同名参数）只启动ZLG→SocketCAN线程，继续原VCU报文日志和模式缓存；设备层 `zlg_bridge_tx` 拒绝发送。不启动SocketCAN→ZLG线程，外部向虚拟接口注入的数据也不会经此桥转到硬件。默认不传参数时保持双向桥。
 
 人工驾驶记录由主仓库CLI M键选择的有人跑动记录模式独占启动本桥，额外强制 `--log-frames=on` 并使用当次运行的zlgCAN_log目录，禁止复用外部桥。正常模式不能复用只收桥。设备仍使用原work_mode=0，未配置电气静默监听；这里只承诺软件不调用硬件数据帧发送。无硬件回归：`python3 -m pytest tests/test_receive_only.py`，以替代IO执行真实main及设备层函数，不打开USB/CAN。
+
+## 每次初始化与USB失效处理（2026-11-11）
+
+宿主start_fsd_manager.sh→start_full_fsd.sh每次先核对并终止同接口唯一旧桥，确认退出后创建新桥；独立本脚本不替用户杀进程，设备独占冲突则失败。当前实际链接的libusbcan-4e仅支持唯一type31/index0设备（0471:126a），通道0..3；上文其他型号仅为历史参数说明，不表示此二进制支持。
+
+初始化按厂商Linux示例执行Open→Init→尽力预复位→SetValue(波特率/正常模式)→Start。此Linux库成功返回0、失败为负，不能按通用头文件的SetValue成功1注释误报；初始化失败关闭后0.5秒重试，最多3次。
+
+保留原USB连接sysfs目录，每250ms检查设备身份及ZCAN_ReadChannelErrInfo，发送前也检查USB身份；断开/重新枚举或驱动错误锁定故障，停止使用旧句柄并非零退出，清理模式缓存。不在运行中自动重新发送驾驶指令。单纯无接收帧不作为USB断开的证据。日志fsd2vcu保留SocketCAN输入，不证明硬件发送成功；FSD->VCU(queue)只表示驱动接受提交，实际送达需VCU反馈确认。
+
+本轮按用户要求未构建、未执行测试及硬件验证。
+
+2026-11-11预复位门槛修正：厂商Linux示例不检查启动前ZCAN_ResetCAN的返回值。预复位负值仅告警，USB身份必须仍有效，再继续严格检查属性配置、StartCAN和启动后健康状态；未尝试StartCAN的初始化失败路径不重复复位，仍关闭设备。该调整不放宽USB失效检测或驱动运行错误退出；按用户要求未构建或验证。
+
+2026-11-11临时覆盖（按用户要求）：zlgcan_bridge/zlg_bridge.h中ZLG_RUNTIME_HEALTH_CHECKS=0，暂停运行时USB身份检查、驱动错误队列读取及发送前USB身份检查；原检查实现保留，将宏改回1可恢复。启动时独占/USB身份绑定、预复位后的USB存在检查、配置与StartCAN结果、驱动收发接口直接失败及进程监管仍保留。未构建、未验证、未重启当前进程；下一次启动编译后生效。
+
+2026-11-13临时错误处理（覆盖此前任意非零事件退出的说明）：依据USBCAN-4E-U Linux专用手册正文第8页表2，0xE6为CAN总线其他错误，0xE5为总线关闭。zlg_side.c:zlg_bridge_check_health对0xE6按每2秒最多一次告警，记录本次设备打开会话的累计次数并继续读取错误队列，不置g_fault、不触发退出；其他非零事件、USB身份变化及驱动收发/错误读取调用失败沿原处理。错误码按枚举比较，不按通用头文件位掩码拆解；其余诊断字段对4E无有效性保证。当前源码健康检查宏为1，本条是开启检查时的分类策略，不整体关闭检查。按用户要求未运行测试或硬件验证，未重启当前进程；下次启动桥脚本编译后生效。
